@@ -116,6 +116,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -126,6 +127,8 @@ var (
 	GET_USERS_URL    = "https://jsonplaceholder.typicode.com/users"
 	GET_POSTS_URL    = "https://jsonplaceholder.typicode.com/posts"
 	GET_COMMENTS_URL = "https://jsonplaceholder.typicode.com/comments"
+
+	filename = "data.json"
 )
 
 type User struct {
@@ -185,23 +188,18 @@ func AggregateData(
 	comments []Comment,
 ) []UserWithPostsAndComments {
 	postMap := make(map[int][]Post)
-	fmt.Println(postMap)
 	for _, p := range posts {
 		postMap[p.UserID] = append(postMap[p.UserID], p)
 	}
-	fmt.Println(postMap)
 
 	commentMap := make(map[int][]Comment)
-	fmt.Println(commentMap)
 	for _, c := range comments {
 		commentMap[c.PostID] = append(commentMap[c.PostID], c)
 	}
-	fmt.Println(commentMap)
 
 	var result []UserWithPostsAndComments
 	for _, u := range users {
 		userPosts := postMap[u.ID]
-		fmt.Println(userPosts)
 
 		var postWithComments []PostWithComments
 		for _, p := range userPosts {
@@ -218,6 +216,7 @@ func AggregateData(
 	}
 	return result
 }
+
 func fetchUsers(wg *sync.WaitGroup, usersCh chan<- []User) {
 	defer wg.Done()
 
@@ -342,17 +341,61 @@ func writeToJSONFile(data []UserWithPostsAndComments, filename string) error {
 	return nil
 }
 
+func readAndAnalyze(filename string) error {
+	file, err := os.Open(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return err
+	}
+
+	var users []UserWithPostsAndComments
+	if err := json.Unmarshal(data, &users); err != nil {
+		return err
+	}
+
+	totalUsers := len(users)
+	totalPosts := 0
+	totalComments := 0
+	userMostPosts := ""
+	maxPosts := 0
+
+	for _, user := range users {
+		numPosts := len(user.Posts)
+		totalPosts += numPosts
+		if numPosts > maxPosts {
+			maxPosts = numPosts
+			userMostPosts = user.User.Name
+		}
+
+		for _, post := range user.Posts {
+			totalComments += len(post.Comment)
+		}
+	}
+
+	fmt.Printf("Summary of data for file %q:\n", filename)
+	fmt.Printf("Total users: %d\n", totalUsers)
+	fmt.Printf("Total posts: %d\n", totalPosts)
+	fmt.Printf("Total comments: %d\n", totalComments)
+	fmt.Printf("User with most posts: %s (%d posts)\n", userMostPosts, maxPosts)
+
+	return nil
+}
+
 func main() {
 	users, posts, comments := fetchAllData()
 
-	fmt.Println("Usuarios:", len(users))
-	fmt.Println("Posts:", len(posts))
-	fmt.Println("Comentarios:", len(comments))
-
 	aggregated := AggregateData(users, posts, comments)
-	fmt.Println(aggregated)
 
-	if err := writeToJSONFile(aggregated, "test.json"); err != nil {
+	if err := writeToJSONFile(aggregated, filename); err != nil {
 		log.Fatal(err)
+	}
+
+	if err := readAndAnalyze(filename); err != nil {
+		log.Fatalf("Falha ao processar o arquivo: %v", err)
 	}
 }
