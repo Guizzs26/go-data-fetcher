@@ -136,7 +136,7 @@ type User struct {
 
 type Post struct {
 	ID     int    `json:"id"`
-	UserID int    `json:"user_id"`
+	UserID int    `json:"userId"`
 	Title  string `json:"title"`
 	Body   string `json:"body"`
 }
@@ -149,6 +149,74 @@ type Comment struct {
 	Body   string `json:"body"`
 }
 
+type UseWithPostsAndComments struct {
+	User  User               `json:"user"`
+	Posts []PostWithComments `json:"posts"`
+}
+
+type PostWithComments struct {
+	Post    Post      `json:"post"`
+	Comment []Comment `json:"comment"`
+}
+
+/*
+We want something like that:
+
+[
+
+	{
+	  "user": {...},
+	  "posts": [
+	    {
+	      "post": {...},
+	      "comments": [...]
+	    },
+	    ...
+	  ]
+	},
+	...
+
+]
+*/
+func AggregateData(
+	users []User,
+	posts []Post,
+	comments []Comment,
+) []UseWithPostsAndComments {
+	postMap := make(map[int][]Post)
+	fmt.Println(postMap)
+	for _, p := range posts {
+		postMap[p.UserID] = append(postMap[p.UserID], p)
+	}
+	fmt.Println(postMap)
+
+	commentMap := make(map[int][]Comment)
+	fmt.Println(commentMap)
+	for _, c := range comments {
+		commentMap[c.PostID] = append(commentMap[c.PostID], c)
+	}
+	fmt.Println(commentMap)
+
+	var result []UseWithPostsAndComments
+	for _, u := range users {
+		userPosts := postMap[u.ID]
+		fmt.Println(userPosts)
+
+		var postWithComments []PostWithComments
+		for _, p := range userPosts {
+			postWithComments = append(postWithComments, PostWithComments{
+				Post:    p,
+				Comment: commentMap[p.ID],
+			})
+		}
+
+		result = append(result, UseWithPostsAndComments{
+			User:  u,
+			Posts: postWithComments,
+		})
+	}
+	return result
+}
 func fetchUsers(wg *sync.WaitGroup, usersCh chan<- []User) {
 	defer wg.Done()
 
@@ -257,4 +325,7 @@ func main() {
 	fmt.Println("Usuarios:", len(users))
 	fmt.Println("Posts:", len(posts))
 	fmt.Println("Comentarios:", len(comments))
+
+	aggregated := AggregateData(users, posts, comments)
+	fmt.Println(aggregated)
 }
