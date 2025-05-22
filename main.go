@@ -118,6 +118,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"sync"
 )
 
@@ -149,7 +150,7 @@ type Comment struct {
 	Body   string `json:"body"`
 }
 
-type UseWithPostsAndComments struct {
+type UserWithPostsAndComments struct {
 	User  User               `json:"user"`
 	Posts []PostWithComments `json:"posts"`
 }
@@ -182,7 +183,7 @@ func AggregateData(
 	users []User,
 	posts []Post,
 	comments []Comment,
-) []UseWithPostsAndComments {
+) []UserWithPostsAndComments {
 	postMap := make(map[int][]Post)
 	fmt.Println(postMap)
 	for _, p := range posts {
@@ -197,7 +198,7 @@ func AggregateData(
 	}
 	fmt.Println(commentMap)
 
-	var result []UseWithPostsAndComments
+	var result []UserWithPostsAndComments
 	for _, u := range users {
 		userPosts := postMap[u.ID]
 		fmt.Println(userPosts)
@@ -210,7 +211,7 @@ func AggregateData(
 			})
 		}
 
-		result = append(result, UseWithPostsAndComments{
+		result = append(result, UserWithPostsAndComments{
 			User:  u,
 			Posts: postWithComments,
 		})
@@ -319,6 +320,28 @@ func fetchAllData() (users []User, posts []Post, comments []Comment) {
 	return
 }
 
+func writeToJSONFile(data []UserWithPostsAndComments, filename string) error {
+	file, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	jsonData, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	_, err = file.Write(jsonData)
+	if err != nil {
+		return err
+	}
+
+	log.Println("✅ JSON file save successfully", filename)
+
+	return nil
+}
+
 func main() {
 	users, posts, comments := fetchAllData()
 
@@ -328,4 +351,8 @@ func main() {
 
 	aggregated := AggregateData(users, posts, comments)
 	fmt.Println(aggregated)
+
+	if err := writeToJSONFile(aggregated, "test.json"); err != nil {
+		log.Fatal(err)
+	}
 }
